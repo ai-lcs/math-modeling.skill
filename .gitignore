@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.pytest_cache/
+.mypy_cache/
+dist/
+build/

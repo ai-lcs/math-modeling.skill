@@ -1,0 +1,4 @@
+interface:
+  display_name: "数学建模_skill"
+  short_description: "证据驱动地完成选题、建模、验证、作图、写作与提交审计"
+  default_prompt: "使用 $math-modeling 对赛题、数据、模型、代码和论文执行完整的证据驱动工作流。"
