@@ -51,7 +51,7 @@
 
 ## 5. 第三方复核流程（跨 Agent 审计）
 
-定位材料：`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`，按 mtime 排序取目标会话；解析 `type=response_item` 且 `payload.role` 过滤；用户消息跳过 `<environment_context>`/`<recommended_plugins>`/`<user_instructions>` 前缀才是真实请求。大文件先抽取 user/assistant/tool 三类落盘再分析。
+定位材料：若使用 Codex，会话记录位于 `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`，按 mtime 排序取目标会话；解析 `type=response_item` 且 `payload.role` 过滤。其他 Agent 平台按各自会话存储路径定位，核心原则是：跳过环境上下文/推荐插件/系统指令前缀，提取真实用户请求后分析。
 
 复核顺序（由廉到贵）：
 1. 从结果明细 sheet **逐行重算**全部指标（不要信汇总表）；

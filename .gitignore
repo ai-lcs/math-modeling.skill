@@ -1,13 +1,8 @@
-__pycache__/
-*.py[cod]
-*.log
-*.tmp
-*.bak
+# Agent 平台特定文件
+agents/
+*.swp
+*.swo
+*~
 .DS_Store
-Thumbs.db
-.idea/
-.vscode/
-.pytest_cache/
-.mypy_cache/
-dist/
-build/
+__pycache__/
+*.pyc
