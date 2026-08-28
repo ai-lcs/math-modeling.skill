@@ -83,6 +83,10 @@ git clone https://github.com/ai-lcs/math-modeling.skill.git <agent-skills-dir>/m
 - **机械化强制优于说教**：每条重要规则都应能变成脚本或门禁，不依赖 Agent 自觉
 - **人机分工边界清晰**：人做决策、Agent 做有界任务；审计不能依赖自觉，要做成机械步骤
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=ai-lcs/math-modeling.skill&type=Date)](https://star-history.com/#ai-lcs/math-modeling.skill&Date)
+
 ## License
 
 MIT
