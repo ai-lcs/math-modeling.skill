@@ -85,7 +85,13 @@ git clone https://github.com/ai-lcs/math-modeling.skill.git <agent-skills-dir>/m
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=ai-lcs/math-modeling.skill&type=Date)](https://star-history.com/#ai-lcs/math-modeling.skill&Date)
+<a href="https://www.star-history.com/?type=date&repos=ai-lcs%2Fmath-modeling.skill">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=ai-lcs/math-modeling.skill&type=date&theme=dark&legend=top-left&sealed_token=FPHVimhXuchi-V33SMbggfQ2w3k4Dti8AMUcuzO7lC9B1dFSrMXymOIVoTSISgYrZyt5XFVDUK9O8pga4iWrUiBsc3J_g0nJwuptnSxT7BrW-lJEA_iT4A" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=ai-lcs/math-modeling.skill&type=date&legend=top-left&sealed_token=FPHVimhXuchi-V33SMbggfQ2w3k4Dti8AMUcuzO7lC9B1dFSrMXymOIVoTSISgYrZyt5XFVDUK9O8pga4iWrUiBsc3J_g0nJwuptnSxT7BrW-lJEA_iT4A" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=ai-lcs/math-modeling.skill&type=date&legend=top-left&sealed_token=FPHVimhXuchi-V33SMbggfQ2w3k4Dti8AMUcuzO7lC9B1dFSrMXymOIVoTSISgYrZyt5XFVDUK9O8pga4iWrUiBsc3J_g0nJwuptnSxT7BrW-lJEA_iT4A" />
+ </picture>
+</a>
 
 ## License
 
