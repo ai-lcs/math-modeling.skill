@@ -46,11 +46,39 @@ math-modeling.skill/
 │   ├── problem-types-and-validation.md ← 问题类型与验证策略
 │   ├── statistical-problems.md      ← 统计类问题建模范式
 │   └── workflow-templates.md        ← 任务控制表模板
-└── scripts/                         ← 可执行脚本（数据指纹、占位符扫描、图形审计、数据画像）
-    ├── data_fingerprint.py          ← 二手数据指纹比对（机械准入门槛）
-    ├── scan_placeholders.py         ← 论文成稿空占位符与数字缺失扫描
-    ├── audit_figure.py              ← 图表一致性审计
-    └── profile_tabular_data.py      ← 数据画像与质量报告
+├── scripts/                         ← 可执行脚本（数据指纹、占位符扫描、图形审计、数据画像）
+│   ├── data_fingerprint.py          ← 二手数据指纹比对（机械准入门槛）
+│   ├── scan_placeholders.py         ← 论文成稿空占位符与数字缺失扫描
+│   ├── audit_figure.py              ← 图表一致性审计
+│   └── profile_tabular_data.py      ← 数据画像与质量报告
+└── paper-formatting/                ← 独立 Skill：论文 Word 排版规范与工具（见下）
+    ├── SKILL.md                     ← 触发条件、格式规格、工作流与验收标准
+    └── scripts/                     ← OMML 公式构造、run 级文本修补、章节替换
+        ├── omml_lib.py              ← LaTeX→OMML、公式表、三线表构造器
+        ├── docx_patch.py            ← run 级安全文本替换（跨 run 拆分免疫）
+        └── docx_section_swap.py     ← 跨文档章节替换（标题定界、深拷贝插入）
+```
+
+## 内置 Skill：paper-formatting
+
+以 2026 模拟赛 1B 论文（final.docx）管线的实测规格为基准的 **Word 排版规范**，覆盖：
+
+- 图片公式 → 原生 OMML（latex2mathml + Office MML2OMML.XSL），公式表=1行2列无边框、编号加粗全角
+- 三线表、图注/表注、字号映射（小四/五号半点值）、标题与正文段落实测参数
+- 全文公式连续编号与正文"式（N）"引用同步纪律
+- run 级文本修复（Word 重存导致的跨 run 拆分免疫）
+- 跨文档章节替换（含已实测的限制：图片 rId 需另行处理）
+
+随附三个脚本均有冒烟/端到端测试记录，可直接复用。安装时如需单独启用该 Skill：
+
+```bash
+# 方式一：随主 skill 克隆后手动复制
+git clone https://github.com/ai-lcs/math-modeling.skill.git
+cp -r math-modeling.skill/paper-formatting <agent-skills-dir>/paper-formatting
+
+# 方式二：独立克隆仓库子目录（sparse checkout）
+git clone --filter=blob:none --sparse https://github.com/ai-lcs/math-modeling.skill.git
+cd math-modeling.skill && git sparse-checkout set paper-formatting
 ```
 
 ## 安装方式
