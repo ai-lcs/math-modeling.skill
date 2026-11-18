@@ -6,7 +6,9 @@
     python scan_placeholders.py FILE [FILE ...]
 
 对每个文件逐行扫描「漏填数字 / 占位符」模式，输出 `file:line: 模式` 清单。
-仅诊断、不修改文件。.md/.txt 直接读；.docx 若可用 python-docx 则抽取正文与表格。
+仅诊断、不修改文件。扫描 UTF-8 .md/.txt 和 .docx 的正文段落与顶层表格。
+不校验数字正确性或其来源。退出码：0 = 未检出疑似项；1 = 检出疑似项；
+2 = 至少一个输入无法扫描（即使其他输入检出疑似项）。
 
 设计原则：宁少报、不误报。数学论文里「X：」后跟公式是常态，所以对「冒号/谓语
 结尾」类模式会看下一行——下一行若是公式（$、\\(、\\[ 开头，或含 =/∑/∫/±），判定为
@@ -42,10 +44,7 @@ def looks_like_formula(line):
 
 
 def extract_docx(path):
-    try:
-        from docx import Document
-    except ImportError:
-        return None, None
+    from docx import Document
     doc = Document(path)
     paras = [p.text for p in doc.paragraphs]
     table_lines = []
@@ -60,11 +59,10 @@ def extract_text(path):
     ext = os.path.splitext(path)[1].lower()
     if ext == '.docx':
         paras, tables = extract_docx(path)
-        if paras is None:
-            print(f'  [跳过 {path}: 缺 python-docx]', file=sys.stderr)
-            return []
         return paras + tables
-    with open(path, encoding='utf-8', errors='replace') as f:
+    if ext not in ('.md', '.txt'):
+        raise ValueError(f'不支持的文件格式：{ext}')
+    with open(path, encoding='utf-8-sig') as f:
         return f.read().splitlines()
 
 
@@ -73,11 +71,16 @@ def main(argv):
         print(__doc__)
         return 2
     hits = 0
+    failed = 0
     for path in argv:
-        if not os.path.exists(path):
-            print(f'  [不存在] {path}', file=sys.stderr)
+        try:
+            lines = extract_text(path)
+            if not any(line.strip(' |\t') for line in lines):
+                raise ValueError('没有可扫描的文本')
+        except Exception as exc:
+            print(f'  [检查未完成] {path}: {exc}', file=sys.stderr)
+            failed += 1
             continue
-        lines = extract_text(path)
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
             if not stripped:
@@ -97,7 +100,9 @@ def main(argv):
                     print(f'{path}:{i}: [{desc}] {stripped[:80]}')
                     hits += 1
                     break
-    print(f'\n共 {hits} 处疑似漏填，请逐条人工核验（冒号后跟公式属正常，已尽量跳过）。')
+    print(f'\n已扫描文件共 {hits} 处疑似漏填；{failed} 个文件未完成扫描。')
+    if failed:
+        return 2
     return 0 if hits == 0 else 1
 
 

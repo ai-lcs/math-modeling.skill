@@ -1,4 +1,4 @@
 interface:
   display_name: "数学建模与论文工作台"
-  short_description: "统筹建模、代码验证，并生成可继续人工修改的竞赛论文母稿"
-  default_prompt: "使用 $math-modeling 恢复当前项目状态，将建模思路和代码结果整理为结构清楚、证据可核验、可继续人工修改的论文母稿。"
+  short_description: "协助竞赛选题、建模、验证、论文写作与审计"
+  default_prompt: "使用 $math-modeling 按我当前的建模任务和授权范围推进，并说明结论所依据的证据。"

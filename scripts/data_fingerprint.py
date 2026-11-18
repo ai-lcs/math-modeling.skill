@@ -1,125 +1,152 @@
 #!/usr/bin/env python
-"""数据指纹比对：二手表格进入论文前的机械准入门槛。
+"""比较同口径时间序列表的时间键和一个指定数值列。
 
-用法：
-    python data_fingerprint.py --raw RAW.xlsx --cand CAND.xlsx \
-        [--time-col DATE_TIME] [--value-col NTU]
+用法：python data_fingerprint.py --raw RAW.xlsx --cand CAND.xlsx
+          --time-col DATE_TIME --value-col NTU [--sheet 数据]
 
-对候选表(cand)与原始/权威表(raw)分别生成指纹并比对：
-行数、唯一时间键、重复键、不可解析时刻样本、目标列极值及位置、缺失数。
-任一硬性项不一致 -> 退出码 1（不通过）；一致 -> 退出码 0。
-
-原始数据布局特殊（多月表拼接等）时，先用适配代码把它规整成
-【时间键 + 数值列】的 DataFrame，再 import 本脚本的 fingerprint/compare，
-报告字段保持不变。
-
-自检：python data_fingerprint.py --selftest
+支持 CSV、Excel。时间键须唯一，采用 YYYY-MM-DD 或 ISO 日期时间；
+带时区的时间按同一时刻对齐，未标时区的时间不推断时区。数值精确比较，
+允许双方在相同时间键上留空。其他列、数据来源和处理逻辑不在检查范围内。
+退出码：0 = 所查范围一致；1 = 不一致；2 = 无法完成检查。
+需要 pandas；Excel 另需对应的 pandas 读取引擎，例如 .xlsx 用 openpyxl。
+不同口径、不同布局或合法重复时间键，请先明确变换与连接键，再另行核验。
 """
 from __future__ import annotations
 
 import argparse
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
+import re
 import sys
 
 
-def _load(path, sheet=None):
+ISO_TIME = re.compile(
+    r"\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?"
+    r"(?:Z|[+-]\d{2}:?\d{2})?)?"
+)
+
+
+def _load(path, sheet):
     import pandas as pd
 
-    if str(path).lower().endswith(".csv"):
-        return pd.read_csv(path)
-    return pd.read_excel(path, sheet_name=sheet or 0)
+    suffix = Path(path).suffix.lower()
+    if suffix == ".csv":
+        table = pd.read_csv(path, header=None, dtype=str, keep_default_na=False)
+    elif suffix in {".xls", ".xlsx"}:
+        table = pd.read_excel(path, sheet_name=0 if sheet is None else sheet,
+                              header=None, dtype=str, keep_default_na=False)
+    else:
+        raise ValueError(f"不支持的文件格式：{suffix}")
+    if table.empty:
+        raise ValueError("没有表头")
+    data = table.iloc[1:].copy()
+    data.columns = table.iloc[0].tolist()
+    return data
 
 
-def fingerprint(df, time_col=None, value_col=None):
-    """对单张表生成指纹字典。"""
+def index_table(frame, time_col, value_col):
     import pandas as pd
 
-    rep = {"rows": int(len(df))}
-    if time_col and time_col in df.columns:
-        t = df[time_col]
-        rep["unique_time_keys"] = int(t.nunique())
-        rep["dup_time_rows"] = int(t.duplicated().sum())
-        parsed = pd.to_datetime(t, errors="coerce")
-        mask_bad = parsed.isna() & t.notna()
-        # 数值垃圾（如 5.87）会被当作 epoch 解析成 1970 年附近 —— 落在合理
-        # 年份窗口之外的时刻同样视为非法，防止"假成功"混进表。
-        mask_epoch = parsed.notna() & (
-            (parsed.dt.year < 2000) | (parsed.dt.year > 2100)
-        )
-        rep["unparseable_time"] = int((mask_bad | mask_epoch).sum())
-        rep["bad_time_samples"] = [str(x) for x in t[mask_bad | mask_epoch].head(5)]
-    if value_col and value_col in df.columns:
-        v = pd.to_numeric(df[value_col], errors="coerce")
-        rep["value_na"] = int(v.isna().sum())
-        if v.notna().any():
-            rep["value_max"] = round(float(v.max()), 6)
-            rep["value_max_at"] = (
-                str(df.loc[v.idxmax(), time_col]) if time_col else str(v.idxmax())
-            )
-            rep["value_min"] = round(float(v.min()), 6)
-            rep["value_min_at"] = (
-                str(df.loc[v.idxmin(), time_col]) if time_col else str(v.idxmin())
-            )
-    return rep
+    columns = frame.columns.tolist()
+    missing_cols = [name for name in (time_col, value_col) if name not in columns]
+    if missing_cols:
+        raise ValueError(f"缺少列：{', '.join(missing_cols)}")
+    if any(columns.count(name) > 1 for name in (time_col, value_col)):
+        raise ValueError("所指定的键列或数值列存在重名")
+    if frame.empty:
+        raise ValueError("没有数据行")
+
+    indexed = {}
+    for row, (time_text, value_text) in enumerate(
+        frame[[time_col, value_col]].itertuples(index=False, name=None), 1
+    ):
+        if not ISO_TIME.fullmatch(time_text.strip()):
+            raise ValueError(f"第 {row} 个数据行的时间键不是有效 ISO 日期或时间：{time_text!r}")
+        try:
+            timestamp = pd.Timestamp(time_text.strip())
+        except (ValueError, OverflowError) as exc:
+            raise ValueError(f"第 {row} 个数据行的时间键无效：{time_text!r}") from exc
+        if timestamp in indexed:
+            raise ValueError(f"第 {row} 个数据行的时间键重复：{timestamp}")
+
+        value = None
+        if value_text.strip():
+            try:
+                value = Decimal(value_text.strip())
+                if not value.is_finite():
+                    raise InvalidOperation
+            except InvalidOperation as exc:
+                raise ValueError(f"第 {row} 个数据行不是有限数值：{value_text!r}") from exc
+        indexed[timestamp] = value
+    return indexed
 
 
-def compare(rep_raw, rep_cand, keys):
-    """返回 {字段: (raw值, cand值)} 形式的差异集。"""
-    return {k: (rep_raw.get(k), rep_cand.get(k))
-            for k in keys if rep_raw.get(k) != rep_cand.get(k)}
+def compare_tables(raw, cand):
+    missing = [time for time in raw if time not in cand]
+    extra = [time for time in cand if time not in raw]
+    changed = [time for time in raw if time in cand and raw[time] != cand[time]]
+    return missing, extra, changed
 
 
-HARD_KEYS = ["rows", "unique_time_keys", "value_max", "value_min"]
+def _selftest():
+    import pandas as pd
+
+    base = pd.DataFrame({"T": ["2025-01-01", "2025-01-02", "2025-01-03"],
+                         "V": ["0", "1", "10"]})
+    raw = index_table(base, "T", "V")
+    assert not any(compare_tables(raw, index_table(base.iloc[::-1], "T", "V")))
+    changed = base.assign(V=["0", "9", "10"])
+    assert len(compare_tables(raw, index_table(changed, "T", "V"))[2]) == 1
+    shifted = base.assign(T=["2026-01-01", "2026-01-02", "2026-01-03"])
+    assert tuple(map(len, compare_tables(raw, index_table(shifted, "T", "V")))) == (3, 3, 0)
+    for invalid in (base.assign(T=["2025-01-01", "5.87", "2025-01-03"]),
+                    base.assign(T=["2025-01-01", "2025-01-01", "2025-01-03"]),
+                    base.drop(columns="V")):
+        try:
+            index_table(invalid, "T", "V")
+        except ValueError:
+            continue
+        raise AssertionError("无效输入未被拒绝")
+    print("SELFTEST PASS")
+    return 0
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--raw", help="原始/权威数据文件")
-    ap.add_argument("--cand", help="候选表（待准入的工作簿/导出）")
-    ap.add_argument("--time-col", dest="time_col", default=None)
-    ap.add_argument("--value-col", dest="value_col", default=None)
-    ap.add_argument("--sheet", default=None, help="excel 表单名（默认第一个）")
-    ap.add_argument("--keys", nargs="*", default=HARD_KEYS,
-                    help="参与硬性比对的指纹字段")
-    ap.add_argument("--selftest", action="store_true")
-    a = ap.parse_args(argv)
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--raw", help="原始或权威数据文件")
+    parser.add_argument("--cand", help="待核验的候选表")
+    parser.add_argument("--time-col", help="两表共用的唯一时间键列名")
+    parser.add_argument("--value-col", help="两表共用的数值列名")
+    parser.add_argument("--sheet", help="两份 Excel 共用的表单名，默认首个表单")
+    parser.add_argument("--selftest", action="store_true")
+    args = parser.parse_args(argv)
+    if args.selftest:
+        return _selftest()
+    if not all((args.raw, args.cand, args.time_col, args.value_col)):
+        parser.error("需要 --raw、--cand、--time-col 与 --value-col，或使用 --selftest")
+    if args.time_col == args.value_col:
+        parser.error("时间键和数值列必须不同")
 
-    if a.selftest:
-        import pandas as pd
+    indexed = []
+    for label, path in (("RAW", args.raw), ("CAND", args.cand)):
+        try:
+            indexed.append(index_table(_load(path, args.sheet), args.time_col, args.value_col))
+        except Exception as exc:
+            print(f"检查未完成（{label}: {path}）：{exc}", file=sys.stderr)
+            return 2
 
-        # 用真实时间戳构造，复刻"丢极值 + 注入数值垃圾时刻"的事故形态
-        ts = pd.date_range("2025-01-01", periods=100, freq="h")
-        base = pd.DataFrame({"T": [str(x) for x in ts],
-                             "V": [i % 7 * 0.5 for i in range(100)]})
-        base.loc[42, "V"] = 11.9  # 全局最大极值
-        dirty = base.drop(index=[42]).copy()
-        dirty = pd.concat(
-            [dirty, pd.DataFrame({"T": ["5.87"] * 5, "V": [0.3] * 5})],
-            ignore_index=True,
-        )
-        r1 = fingerprint(base, "T", "V")
-        r2 = fingerprint(dirty, "T", "V")
-        d = compare(r1, r2, HARD_KEYS)
-        # 丢极值(-1键)+注5行同键(+1键)后 unique_time_keys 恰好抵消，
-        # 但 rows/value_max/非法时刻必须暴露差异 —— 这正是真实事故的形态。
-        assert set(d) >= {"rows", "value_max"}, d
-        assert r2["unparseable_time"] == 5, r2
-        assert set(r2["bad_time_samples"]) == {"5.87"}, r2
-        print("SELFTEST PASS — 唯一键数恰好抵消时仍识别脏表：", d)
-        return 0
-
-    if not a.raw or not a.cand:
-        ap.error("需要 --raw 与 --cand，或使用 --selftest")
-    rr = fingerprint(_load(a.raw, a.sheet), a.time_col, a.value_col)
-    cc = fingerprint(_load(a.cand, a.sheet), a.time_col, a.value_col)
-    print("RAW :", rr)
-    print("CAND:", cc)
-    diffs = compare(rr, cc, a.keys)
-    if diffs:
-        print("\n指纹不一致 —— 候选表不得作为论文主表数据源：")
-        for k, (rv, cv) in diffs.items():
-            print(f"  {k}: raw={rv}  cand={cv}")
+    raw, cand = indexed
+    missing, extra, changed = compare_tables(raw, cand)
+    if missing or extra or changed:
+        print(f"不一致：候选表缺少 {len(missing)} 个键，多出 {len(extra)} 个键，"
+              f"同键数值不同 {len(changed)} 个。")
+        for label, keys in (("缺少键", missing), ("多出键", extra), ("数值不同", changed)):
+            for key in keys[:5]:
+                detail = f"：原表={raw[key]}，候选表={cand[key]}" if label == "数值不同" else ""
+                print(f"  {label} {key}{detail}")
         return 1
-    print("\n指纹一致：候选表通过准入。")
+    print(f"所查范围一致：{len(raw)} 个时间键及列 {args.value_col!r} 的对应值。"
+          "未检查其他列或数据来源。")
     return 0
 
 

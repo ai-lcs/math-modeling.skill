@@ -35,6 +35,7 @@ math-modeling.skill/
 ├── references/                      ← 参考文档（按任务类型组织）
 │   ├── competition-compliance.md    ← 竞赛规则与 AI 使用合规
 │   ├── paper-hand-workflow.md       ← 论文手主工作流
+│   ├── paper-hand-preferences.md    ← 作者的论文工作偏好，按需启用
 │   ├── paper-structure-patterns.md  ← 论文结构模式库
 │   ├── paper-and-visualization.md   ← 论文结构、摘要、公式、表格与图表
 │   ├── out-of-sample-evaluation-and-drift.md ← 外推评估与时间漂移
@@ -47,7 +48,7 @@ math-modeling.skill/
 │   ├── statistical-problems.md      ← 统计类问题建模范式
 │   └── workflow-templates.md        ← 任务控制表模板
 ├── scripts/                         ← 可执行脚本（数据指纹、占位符扫描、图形审计、数据画像）
-│   ├── data_fingerprint.py          ← 二手数据指纹比对（机械准入门槛）
+│   ├── data_fingerprint.py          ← 同口径时间序列表逐键核验
 │   ├── scan_placeholders.py         ← 论文成稿空占位符与数字缺失扫描
 │   ├── audit_figure.py              ← 图表一致性审计
 │   └── profile_tabular_data.py      ← 数据画像与质量报告
@@ -59,9 +60,9 @@ math-modeling.skill/
         └── docx_section_swap.py     ← 跨文档章节替换（标题定界、深拷贝插入）
 ```
 
-## 内置 Skill：paper-formatting
+## 可选 Skill：paper-formatting
 
-以 2026 模拟赛 1B 论文（final.docx）管线的实测规格为基准的 **Word 排版规范**，覆盖：
+以作者的 2026 模拟赛 1B 论文（final.docx）为基准的 **Word 排版规范**。仅在需要复刻该风格或复用工具时单独启用，新稿以当前模板为准。它覆盖：
 
 - 图片公式 → 原生 OMML（latex2mathml + Office MML2OMML.XSL），公式表=1行2列无边框、编号加粗全角
 - 三线表、图注/表注、字号映射（小四/五号半点值）、标题与正文段落实测参数
@@ -101,15 +102,27 @@ git clone https://github.com/ai-lcs/math-modeling.skill.git <agent-skills-dir>/m
 
 ## 触发条件
 
-当请求明显涉及数学建模竞赛、赛题求解、数据审计、模型验证、论文或提交检查时，Agent 可以根据 `SKILL.md` 中的 `description` 自动选择它。
+当请求涉及数学建模竞赛或项目时，按用户要求进入全流程或对应专项。通用统计问答、普通润色或单纯 Word 排版不自动进入建模流程。
+
+`SKILL.md` 保存通用证据规则与任务路由；`references/` 按题型提供条件化的技术建议和案例；`references/paper-hand-preferences.md` 的作者偏好只在用户或项目采用时启用。
+
+## 核验脚本
+
+```bash
+python scripts/data_fingerprint.py --raw raw.csv --cand candidate.csv --time-col DATE_TIME --value-col NTU
+python scripts/scan_placeholders.py draft.md
+```
+
+- `data_fingerprint.py` 适用于同口径、唯一时间键的 CSV 或 Excel。必须指定时间列和数值列；时间使用 ISO 日期或日期时间。`0` 表示所查键和值一致，`1` 表示不一致，`2` 表示未完成检查。其他字段和来源需另核验；如需比较多列，可逐列执行。依赖 `pandas`，读取 `.xlsx` 另需 `openpyxl`，读取 `.xls` 另需 `xlrd`。
+- `scan_placeholders.py` 检查 UTF-8 Markdown、TXT 和 Word 正文及顶层表格，读 Word 需 `python-docx`。`0` 表示未检出疑似项，`1` 表示检出疑似项，`2` 表示至少一个输入未完成扫描。它不会验证数字是否正确。
 
 ## 贡献
 
 欢迎提交 Issue 和 PR。核心设计哲学：
 
-- **只吸收可嵌入强人工流程的"零件"**：独立门禁、校验脚本、局部规则，拒绝需要替换整体编排方式的"黑盒"方案
-- **机械化强制优于说教**：每条重要规则都应能变成脚本或门禁，不依赖 Agent 自觉
-- **人机分工边界清晰**：人做决策、Agent 做有界任务；审计不能依赖自觉，要做成机械步骤
+- 能确定验证边界的检查用脚本执行；脚本只为实际覆盖的范围提供结果。
+- 技术建议写清适用条件，案例记录和个人习惯不自动成为所有任务的要求。
+- 由当前请求决定分工、授权与所需核验。
 
 ## Star History
 
